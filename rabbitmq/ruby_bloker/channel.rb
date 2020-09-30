@@ -1,9 +1,9 @@
 module Rabbitmq
   class Channel
-    @@chennel = nil
+    @@channel = nil
 
     def self.get_channel
-      if @@chennel.nil?
+      if @@channel.nil?
         connection = Rabbitmq::Connection.get_connection
         @@channel = connection.create_channel
         @@channel.prefetch(1) # worker每次只处理1条消息，在上一条消息没有ack前不会发送其他消息
@@ -12,6 +12,7 @@ module Rabbitmq
         if @@channel.open
           return @@channel
         else
+          connection = Rabbitmq::Connection.get_connection
           @@channel = connection.create_channel
           @@channel.prefetch(1) # worker每次只处理1条消息，在上一条消息没有ack前不会发送其他消息
           return @@channel
