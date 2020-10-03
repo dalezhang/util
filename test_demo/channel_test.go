@@ -36,15 +36,20 @@ func TestLock(t *testing.T) {
 	wg.Wait()
 }
 func TestChannel(t *testing.T) {
-	 c := make(chan int, 5)
+	 c := make(chan int, 15)
 	 go func() {
 		 for i := 0 ; i< 6 ; i++ {
 			 c <- i
 		 }
 	 }()
-	 for i := range c {
-		 fmt.Println("i === ",i, "\nsize === ", len(c))
 
-	 }
+	 go func() {
+		 for i := range c {
+			 fmt.Println("i === ",i, "\nsize === ", len(c))
+		 }
+		 fmt.Println("this rang is quit!!")
+	 }()
+	 var forever chan bool
+	 <- forever
 
 }
