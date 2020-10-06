@@ -6,7 +6,7 @@ class Rabbitmq::Subscriber
   end
 
   def run(&block)
-    channel = Rabbitmq::Channel.get_channel
+    channel = Rabbitmq::Channel.get_suscribe_channel
     exchange_name = @exchange_config[:exchange_name] || "test_topic_exchange"
     exchange_durable = @exchange_config[:durable].nil? ? true : @exchange_config[:durable]
     exchange_auto_delete = @exchange_config[:auto_delete].nil? ? false : @exchange_config[:auto_delete]
