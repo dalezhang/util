@@ -33,6 +33,9 @@ class Rabbitmq::Subscriber
       yield delivery_info, properties, body
       channel.ack(delivery_info.delivery_tag)
     end
+  rescue => e
+    channel.close
+    raise e
   end
 
 end
