@@ -1,122 +1,98 @@
-package brokers
+package rabbitmq
 
 import (
-	"flag"
 	"fmt"
+	"log"
+	"sync"
 	"testing"
+	"time"
 
-	"github.com/streadway/amqp"
+	"github.com/embrace-century/basin-warden/internal/brokers"
+	"github.com/sirupsen/logrus"
 )
 
 var (
-	uri = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
+	err    error
+	broker brokers.Broker
+	dsn    = "amqp://guest:guest@localhost:5672/"
 )
 
 func init() {
-	// fmt.Println("init========================")
-	// // err := Dial(*uri)
-	// err := Dial("amqp://guest:guest@localhost:5672/")
-	// // defer Close()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// queueExchange := &QueueExchange{
-	// 	"test",
-	// 	"rabbit.routeone",
-	// 	"test.exchangeone",
-	// 	amqp.ExchangeTopic,
-	// }
-	// rbbroker, err = NewRabbitmq(queueExchange)
-	// if err != nil {
-	// 	panic(err)
-	// }
-}
-
-type TestMessage struct {
-	A string
-}
-
-func (t *TestMessage) MsgContent() string {
-	fmt.Println(t.A)
-	return t.A
-}
-
-type AAA interface {
-	MsgContent() string
-}
-
-func BBB(a AAA) {
-	fmt.Println("========BBB: ", a.MsgContent())
-}
-
-var AAAs []AAA
-
-func AppendAAA(a AAA) {
-	AAAs = append(AAAs, a)
-}
-
-func TestBrokerClose(t *testing.T) {
-	m := new(TestMessage)
-	m.A = "11111"
-	BBB(m)
-	AppendAAA(m)
-	fmt.Println("====AAAs: ", AAAs)
-}
-
-func TestBrokerDial(t *testing.T) {
-	fmt.Println("init========================")
-	// err := Dial(*uri)
-	conn, err := Dial(*uri)
-	defer conn.Close()
-	if err != nil {
-		fmt.Println("Dial err================")
-		panic(err)
-	}
-	queueExchange := &QueueExchange{
-		"test",
-		"routeone",
-		"logs_topic",
-		amqp.ExchangeTopic,
-	}
-	ch, err := GetChannel()
-	defer ch.Close()
-	// 发送者
-
+	broker, err = Dial(dsn)
 	if err != nil {
 		panic(err)
 	}
-	productBroker, err := NewRabbitmq(ch, queueExchange)
-	if err != nil {
-		panic(err)
+}
+
+type testMessageStruct struct {
+	Number int
+	lock   sync.Mutex
+}
+
+func TestPublish(t *testing.T) {
+
+	routingOpts := RoutingKey("zeng.yi.chen")
+	deliveryMode := DeliveryMode(1)
+
+	var wg sync.WaitGroup
+	m := testMessageStruct{Number: 0}
+	wg.Add(100)
+	for {
+		m.lock.Lock()
+		if m.Number < 100 {
+			go func() {
+				defer m.lock.Unlock()
+				m.Number = m.Number + 1
+				message := &brokers.Message{
+					ContentType: "application/json",
+					Body:        []byte(fmt.Sprintf("My Tao: [%d]", m.Number)),
+				}
+				fmt.Println("m.Number === ", m.Number)
+				err = broker.Publish("test_topic_exchange", message, routingOpts, deliveryMode)
+				if err != nil {
+					logrus.Fatal(err)
+				}
+
+				wg.Done()
+			}()
+
+		} else {
+			break
+		}
+
 	}
-	// 接收者
-	consumeBroker, err := NewRabbitmq(ch, queueExchange)
+	wg.Wait()
+}
+
+type testResponseMessage struct {
+	ContentType string
+	Body        []byte
+	MessageID   string
+	Timestamp   time.Time
+}
+
+func (r testResponseMessage) Handler(message *brokers.ReceivedMessage) error {
+	r.ContentType = message.ContentType
+	r.Body = message.Body
+	r.MessageID = message.MessageID
+	r.Timestamp = message.Timestamp
+	fmt.Printf("message: %s \nrespons_detail: %+v", string(r.Body), r)
+
+	return nil
+}
+func TestSubscribe(t *testing.T) {
+	qn := QueueName("")
+	rkeys := RoutingKeys([]string{"#"})
+
+	r := new(testResponseMessage)
+	err := broker.Subscribe("test_topic_exchange", r, qn, rkeys)
 	if err != nil {
-		panic(err)
+		logrus.Fatal(err)
 	}
 
-	productBroker.AddMessages("11111111111")
-	productBroker.AddMessages("22222222222")
-	productBroker.AddMessages("333333333333")
-
-	err = productBroker.Publish()
-	if err != nil {
-		panic(err)
-	}
-
-	consumeBroker.Subscribe()
-	if err != nil {
-		panic(err)
-	}
-	for i, m := range consumeBroker.ReceivedMessages {
-		fmt.Printf("ReceivedMessages %d, body: %s", i, string(m.Body))
-	}
-
-	// if result.Data.TopicableType != "Series" {
-	// 	t.Errorf("result.Data: %+v \n", result.Data)
-	// }
-	// // "{\"timestamp\":\"2019-08-08 19:52:09\",\"type\":\"topic\",\"id\":8038}
-	// if result.Encrypted.ID != 8038 {
-	// 	t.Errorf("result.Encrypted: %+v \n", result.Encrypted)
-	// }
+	log.Printf(" [*] defer close")
+	defer broker.Close()
+	forever := make(chan bool)
+	log.Printf(" [*] Waiting for logs. To exit press CTRL+C")
+	<-forever
 }
