@@ -27,4 +27,5 @@ func main() {
 		i2 := i * i
 		fmt.Println("--------------->\n", i, " * ", i, "=", i2, "\n enter next:\n")
 	}
+
 }
